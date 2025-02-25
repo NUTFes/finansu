@@ -6,9 +6,6 @@
  * OpenAPI spec version: 2.0.0
  */
 
-export type PostPasswordResetRequestParams = {
-  /**
-   * email
-   */
-  email?: string;
+export type PostUploadFileBody = {
+  file?: Blob;
 };

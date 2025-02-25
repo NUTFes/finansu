@@ -6,9 +6,13 @@
  * OpenAPI spec version: 2.0.0
  */
 
-export type PostPasswordResetRequestParams = {
+export type GetFestivalItemsParams = {
   /**
-   * email
+   * year
    */
-  email?: string;
+  year?: number;
+  /**
+   * division_id
+   */
+  division_id?: number;
 };

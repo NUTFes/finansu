@@ -6,9 +6,13 @@
  * OpenAPI spec version: 2.0.0
  */
 
-export type PostPasswordResetRequestParams = {
+export type GetDivisionsParams = {
   /**
-   * email
+   * year
    */
-  email?: string;
+  year?: number;
+  /**
+   * financial_record_id
+   */
+  financial_record_id?: number;
 };

@@ -6,9 +6,9 @@
  * OpenAPI spec version: 2.0.0
  */
 
-export type PostPasswordResetRequestParams = {
+export type GetBuyReportsDetailsParams = {
   /**
-   * email
+   * year
    */
-  email?: string;
+  year?: number;
 };
