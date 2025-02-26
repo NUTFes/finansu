@@ -5,10 +5,9 @@
  * FinanSu APIドキュメント
  * OpenAPI spec version: 2.0.0
  */
+import type { BuyReport } from './buyReport';
 
-export type PostPasswordResetRequestParams = {
-  /**
-   * email
-   */
-  email?: string;
+export type PostBuyReportsBody = {
+  buy_report: BuyReport;
+  file: Blob;
 };

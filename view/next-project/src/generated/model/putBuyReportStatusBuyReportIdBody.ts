@@ -6,9 +6,9 @@
  * OpenAPI spec version: 2.0.0
  */
 
-export type PostPasswordResetRequestParams = {
-  /**
-   * email
-   */
-  email?: string;
+export type PutBuyReportStatusBuyReportIdBody = {
+  /** 封筒に詰めたか */
+  isPacked?: boolean;
+  /** 精算済みか */
+  isSettled?: boolean;
 };
