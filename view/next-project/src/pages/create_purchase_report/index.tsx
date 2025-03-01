@@ -1,167 +1,175 @@
-import { Box, Button, FormControl, FormLabel, Input, Select, VStack, Text } from '@chakra-ui/react';
+import {
+  Box,
+  Button,
+  FormControl,
+  FormLabel,
+  Input,
+  Select,
+  VStack,
+  Spinner,
+  FormErrorMessage,
+} from '@chakra-ui/react';
 import { Noto_Sans_JP } from 'next/font/google';
 import { useRouter } from 'next/router';
-import React, { useRef, useState } from 'react';
-import { FaExclamationCircle } from 'react-icons/fa';
-import { GoPlus } from 'react-icons/go';
+import React, { useRef, useState, useEffect } from 'react';
 import { PrimaryButton, Title } from '@/components/common';
+import FileUploadField from '@/components/create_purchase_report/FileUploadField';
+import { usePurchaseReportForm } from '@/components/create_purchase_report/usePurchaseReportForm';
+import {
+  validateFile,
+  validateAmount,
+  MAX_AMOUNT,
+  ERROR_MESSAGES,
+} from '@/components/create_purchase_report/validators';
 import MainLayout from '@/components/layout/MainLayout';
+
+// スタイリング用定数
+const CONTAINER_HEIGHT_CLASS = 'h-[calc(100vh-4rem)]';
+const FORM_CONTAINER_CLASS = 'w-full min-w-[300px] max-w-[60%] px-4 py-8 sm:px-6 lg:px-8';
 
 const notoSansJP = Noto_Sans_JP({
   subsets: ['latin'],
   weight: ['100', '400', '700'],
 });
 
-// APIのつなぎ込み後に削除する。
-const MOCK_DEPARTMENTS = [
-  { id: 1, name: 'FinanSu部門' },
-  { id: 2, name: 'Bingo部門' },
-  { id: 3, name: 'インフラ部門' },
-];
-
-const MOCK_FESTIVAL_ITEMS = [
-  { id: 1, name: '景品', departmentId: 2 },
-  { id: 2, name: '文具', departmentId: 1 },
-  { id: 3, name: '装飾品', departmentId: 2 },
-];
-
-interface BuyReport {
-  id: number;
-  departmentId: number;
-  festivalItemID: number;
-  festivalItemName: string;
-  amount: number;
-  paidBy: string;
-}
-
 const PurchaseReportPage = () => {
   const router = useRouter();
-  const { from, reportId, festivalItemName, amount, paidBy } = router.query;
-  const isFromReport = from === 'purchase_report_list';
-
-  // 初期値を編集時と新規作成で分離しています。
-  const getInitialBuyReport = (): BuyReport => {
-    if (isFromReport) {
-      return {
-        id: Number(reportId) || 0,
-        departmentId: 0,
-        festivalItemID: MOCK_FESTIVAL_ITEMS.find((item) => item.name === festivalItemName)?.id || 0,
-        festivalItemName: (festivalItemName as string) || '',
-        amount: Number(amount) || 0,
-        paidBy: (paidBy as string) || '',
-      };
-    }
-    return {
-      id: 0,
-      departmentId: 0,
-      festivalItemID: 0,
-      festivalItemName: '',
-      amount: 0,
-      paidBy: '',
-    };
-  };
-
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [buyReport, setBuyReport] = useState<BuyReport>(getInitialBuyReport());
+  const [fileError, setFileError] = useState<string>('');
+  const [amountError, setAmountError] = useState<string>('');
 
-  const validateFile = (file: File): boolean => {
-    const MAX_FILE_SIZE = 1_073_741_824;
-    if (file.size > MAX_FILE_SIZE) {
-      alert('ファイルサイズが1GBを超えています。別のファイルを選択してください。');
-      return false;
-    }
-    if (!file.type.match(/(image\/.*|application\/pdf)/)) {
-      alert('画像またはPDFファイルのみアップロード可能です。');
-      return false;
-    }
-    return true;
-  };
+  const {
+    isEditMode,
+    purchaseReport,
+    setPurchaseReport,
+    uploadedFile,
+    setUploadedFile,
+    departments,
+    festivalItems,
+    selectedDivisionId,
+    setSelectedDivisionId,
+    handleSubmit,
+    isProcessing,
+    festivalItemName,
+    divisionName,
+  } = usePurchaseReportForm(router);
 
+  // アップロードファイルの検証
+  useEffect(() => {
+    if (uploadedFile) {
+      const { isValid, errorMessage } = validateFile(uploadedFile, false);
+      setFileError(isValid ? '' : errorMessage || '');
+    } else if (!isEditMode) {
+      setFileError(ERROR_MESSAGES.FILE_REQUIRED);
+    }
+  }, [uploadedFile, isEditMode]);
+
+  // 金額の検証
+  useEffect(() => {
+    const { isValid, errorMessage } = validateAmount(purchaseReport.amount, false);
+    setAmountError(isValid ? '' : errorMessage || '');
+  }, [purchaseReport.amount]);
+
+  // ファイル変更処理
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
 
     const targetFile = files[0];
-    if (!validateFile(targetFile)) {
+    const { isValid, errorMessage } = validateFile(targetFile);
+
+    if (!isValid) {
+      setFileError(errorMessage || '');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
-    setReceiptFile(targetFile);
+    setFileError('');
+    setUploadedFile(targetFile);
   };
 
+  // 金額入力処理
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/[^\d]/g, '');
-    setBuyReport((prev) => ({ ...prev, amount: Number(value) || 0 }));
+    const numValue = value === '' ? 0 : Number(value);
+    const limitedValue = Math.min(numValue, MAX_AMOUNT);
+    setPurchaseReport((prev) => ({ ...prev, amount: limitedValue }));
   };
 
-  const filteredFestivalItems = MOCK_FESTIVAL_ITEMS.filter(
-    (item) => !buyReport.departmentId || item.departmentId === buyReport.departmentId,
-  );
+  // 部門選択処理
+  const handleDivisionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedId = parseInt(e.target.value) || 0;
+    setSelectedDivisionId(selectedId);
+    setPurchaseReport((prev) => ({ ...prev, festivalItemID: 0 }));
+  };
+
+  // 物品選択処理
+  const handleItemChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedId = parseInt(e.target.value) || 0;
+    setPurchaseReport((prev) => ({ ...prev, festivalItemID: selectedId }));
+  };
+
+  // フォーム送信の検証
+  const isFormValid = isEditMode
+    ? purchaseReport.amount > 0 && !!purchaseReport.festivalItemID && !isProcessing && !amountError
+    : !!uploadedFile &&
+      !!purchaseReport.paidBy &&
+      purchaseReport.amount > 0 &&
+      !!purchaseReport.festivalItemID &&
+      !!selectedDivisionId &&
+      !isProcessing &&
+      !fileError &&
+      !amountError;
+
+  const filteredFestivalItems = selectedDivisionId && !isEditMode ? festivalItems : [];
 
   return (
     <MainLayout>
       <Box
-        className={`flex h-[calc(100vh-4rem)] items-center justify-center ${notoSansJP.className}`}
+        className={`flex ${CONTAINER_HEIGHT_CLASS} items-center justify-center ${notoSansJP.className}`}
       >
-        <Box className='w-full min-w-[300px] max-w-[60%] px-4 py-8 sm:px-6 lg:px-8'>
+        <Box className={FORM_CONTAINER_CLASS}>
           <Title
             className='mb-6 text-center'
-            title={isFromReport ? '購入報告編集' : '購入報告作成'}
+            title={isEditMode ? '購入報告編集' : '購入報告作成'}
           />
+
           <form className='space-y-6'>
             <VStack spacing={4} align='stretch'>
-              <FormControl id='department' isRequired isDisabled={isFromReport}>
+              {/* 部門選択フォーム */}
+              <FormControl id='department' isRequired isDisabled={isEditMode}>
                 <FormLabel>部門</FormLabel>
-                <Select
-                  placeholder='選択してください'
-                  value={buyReport.departmentId || ''}
-                  onChange={(e) => {
-                    const selectedId = parseInt(e.target.value) || 0;
-                    setBuyReport((prev) => ({
-                      ...prev,
-                      departmentId: selectedId,
-                      festivalItemID: 0,
-                      festivalItemName: '',
-                    }));
-                  }}
-                >
-                  {MOCK_DEPARTMENTS.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl
-                id='product'
-                isRequired
-                isDisabled={isFromReport || !buyReport.departmentId}
-              >
-                <FormLabel>物品</FormLabel>
-                {isFromReport ? (
-                  <Input value={buyReport.festivalItemName} disabled />
+                {isEditMode && divisionName ? (
+                  <Input value={divisionName || ''} disabled />
                 ) : (
                   <Select
                     placeholder='選択してください'
-                    value={buyReport.festivalItemID || ''}
-                    onChange={(e) => {
-                      const selectedId = parseInt(e.target.value) || 0;
-                      const selectedItem = filteredFestivalItems.find(
-                        (item) => item.id === selectedId,
-                      );
-                      setBuyReport((prev) => ({
-                        ...prev,
-                        festivalItemID: selectedId,
-                        festivalItemName: selectedItem?.name || '',
-                      }));
-                    }}
-                    isDisabled={!buyReport.departmentId}
+                    value={selectedDivisionId || ''}
+                    onChange={handleDivisionChange}
+                  >
+                    {departments.map((dept) => (
+                      <option key={dept.divisionId} value={dept.divisionId}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </FormControl>
+
+              {/* 物品選択フォーム */}
+              <FormControl id='product' isRequired isDisabled={isEditMode}>
+                <FormLabel>物品</FormLabel>
+                {isEditMode && festivalItemName ? (
+                  <Input value={festivalItemName || ''} disabled />
+                ) : (
+                  <Select
+                    placeholder='選択してください'
+                    value={purchaseReport.festivalItemID || ''}
+                    onChange={handleItemChange}
+                    isDisabled={!selectedDivisionId}
                   >
                     {filteredFestivalItems.map((item) => (
-                      <option key={item.id} value={item.id}>
+                      <option key={item.festivalItemId} value={item.festivalItemId}>
                         {item.name}
                       </option>
                     ))}
@@ -169,90 +177,58 @@ const PurchaseReportPage = () => {
                 )}
               </FormControl>
 
-              <FormControl id='proposer' isRequired isDisabled={isFromReport}>
+              {/* 立替者入力フォーム */}
+              <FormControl id='proposer' isRequired>
                 <FormLabel>立替者</FormLabel>
                 <Input
                   type='text'
-                  value={buyReport.paidBy}
+                  value={purchaseReport.paidBy}
                   onChange={(e) =>
-                    setBuyReport((prev) => ({
-                      ...prev,
-                      paidBy: e.target.value,
-                    }))
+                    setPurchaseReport((prev) => ({ ...prev, paidBy: e.target.value }))
                   }
                   placeholder='立替者を入力してください'
                   required
+                  disabled={isEditMode}
                 />
               </FormControl>
 
-              <FormControl id='amount' isRequired>
+              {/* 金額入力フォーム */}
+              <FormControl id='amount' isRequired isInvalid={!!amountError}>
                 <FormLabel>金額</FormLabel>
                 <Input
                   type='text'
-                  value={buyReport.amount.toLocaleString()}
+                  value={purchaseReport.amount.toLocaleString()}
                   onChange={handleAmountChange}
                   placeholder='金額を入力してください'
                   required
                 />
+                {amountError && <FormErrorMessage>{amountError}</FormErrorMessage>}
               </FormControl>
 
-              {!isFromReport && (
-                <FormControl id='receipt-upload' isRequired>
-                  <FormLabel>領収書（レシート）</FormLabel>
-                  <input
-                    type='file'
-                    accept='image/jpeg,image/png,image/gif,application/pdf'
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    className='hidden'
-                  />
-                  {receiptFile ? (
-                    <div className='border-gray-200 flex min-h-[40px] items-center gap-2 rounded-md border bg-[#E7E7E7] p-2'>
-                      <Text className='ml-2 min-w-0 flex-1 truncate'>{receiptFile.name}</Text>
-                    </div>
-                  ) : (
-                    <Button
-                      className='w-full bg-[#E7E7E7]'
-                      colorScheme='gray'
-                      variant='outline'
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <span className='flex w-full items-center gap-2 font-normal'>
-                        <GoPlus />
-                        領収書（レシート）をアップロード
-                      </span>
-                    </Button>
-                  )}
-                  {!receiptFile && (
-                    <Box className='mt-6 flex items-center justify-center gap-2'>
-                      <FaExclamationCircle color='#B91C1C' />
-                      <Text className='text-sm text-[#B91C1C]'>
-                        領収書（レシート）をアップロードしてください
-                      </Text>
-                    </Box>
-                  )}
-                </FormControl>
-              )}
+              {/* ファイルアップロードフォーム */}
+              <FileUploadField
+                isEditMode={isEditMode}
+                uploadedFile={uploadedFile}
+                fileInputRef={fileInputRef}
+                handleFileChange={handleFileChange}
+                validationError={fileError}
+              />
             </VStack>
           </form>
+
+          {/* フォームアクション */}
           <Box className='mt-6 flex justify-center space-x-4'>
             <div className='flex flex-col gap-2'>
-              <PrimaryButton
-                disabled={
-                  (!isFromReport && !receiptFile) ||
-                  (!isFromReport && !buyReport.paidBy) ||
-                  !buyReport.amount ||
-                  (!isFromReport && !buyReport.festivalItemID)
-                }
-                className='mx-auto'
-              >
-                {isFromReport ? '更新する' : '登録する'}
+              <PrimaryButton disabled={!isFormValid} className='mx-auto' onClick={handleSubmit}>
+                {isProcessing ? <Spinner size='sm' color='white' mr={2} /> : null}
+                {isEditMode ? '更新する' : '登録する'}
               </PrimaryButton>
               <Button
                 className='underline underline-offset-[5px]'
                 colorScheme='red'
                 variant='ghost'
                 onClick={router.back}
+                isDisabled={isProcessing}
               >
                 キャンセル
               </Button>
